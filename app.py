@@ -72,7 +72,7 @@ if uploaded_excel and uploaded_pdf:
                         c.setFillColor(HexColor("#008080"))
                         # Ajuste en X: Se restan 15 puntos para mover a la izquierda
                         # Ajuste en Y: Se mantiene en 230
-                        c.drawCentredString((PAGE_WIDTH / 2) - 15, 230, nombre_platica)
+                        c.drawCentredString((PAGE_WIDTH / 2) - 20, 230, nombre_platica)
 
                     c.save()
 
