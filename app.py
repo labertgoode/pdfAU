@@ -27,11 +27,9 @@ plantilla_tiene_titulo = st.checkbox("La plantilla ya incluye el título del web
 if uploaded_excel and uploaded_pdf:
     if st.button("Procesar"):
         try:
-            # Extraer el nombre del archivo y formatearlo con comillas
             file_name = uploaded_excel.name.replace(".xlsx", "")
             nombre_platica = f'"{file_name}"'
 
-            # Validar y extraer los datos de la columna B limpiamente
             df = pd.read_excel(uploaded_excel, sheet_name="Aprobados", usecols="B")
             zip_buffer = io.BytesIO()
             
@@ -40,24 +38,22 @@ if uploaded_excel and uploaded_pdf:
                 control_duplicados = {}
 
                 # ==========================================
-                # VARIABLES DE CALIBRACIÓN VISUAL
+                # VARIABLES DE CALIBRACIÓN VISUAL EXACTA
                 # ==========================================
-                DESFASE_X = 0            # Modifica a -5, -10, etc. para mover todo a la izquierda
+                DESFASE_X = -25          # AJUSTE: Movido a la izquierda para centrar con el texto gris
                 CENTRO_X = (PAGE_WIDTH / 2) + DESFASE_X
                 
-                POSICION_Y_NOMBRE = 285  # Ajuste vertical para asentar sobre la línea negra
-                MAX_ANCHO_LINEA = 480    # Límite máximo en píxeles para que no rebase la línea
+                POSICION_Y_NOMBRE = 305  # AJUSTE: Subido de 285 a 305 para que el nombre descanse sobre la línea
+                MAX_ANCHO_LINEA = 480    
                 
-                POSICION_Y_TITULO = 215  # Coordenada Y para centrar entre los textos grises
+                POSICION_Y_TITULO = 215  # Se mantiene igual, ya que verticalmente se ve bien
                 # ==========================================
 
                 for index, row in df.iterrows():
                     nombre_participante = row.iloc[0]
-                    # Validación para saltar celdas vacías
                     if pd.isna(nombre_participante):
                         continue
 
-                    # Limpieza de espacios en blanco accidentales al inicio/final
                     nombre_str = str(nombre_participante).strip()
                     iniciales = obtener_iniciales(nombre_str)
                     
@@ -71,7 +67,7 @@ if uploaded_excel and uploaded_pdf:
                     temp_pdf_buffer = io.BytesIO()
                     c = canvas.Canvas(temp_pdf_buffer, pagesize=landscape(letter))
                     
-                    # DIBUJAR EL NOMBRE (Auto-ajustable a la línea negra)
+                    # DIBUJAR EL NOMBRE 
                     tamanio_fuente_nombre = 24
                     while c.stringWidth(nombre_str, "Helvetica-Bold", tamanio_fuente_nombre) > MAX_ANCHO_LINEA and tamanio_fuente_nombre > 10:
                         tamanio_fuente_nombre -= 1 
@@ -80,7 +76,7 @@ if uploaded_excel and uploaded_pdf:
                     c.setFillColor(HexColor("#000000")) 
                     c.drawCentredString(CENTRO_X, POSICION_Y_NOMBRE, nombre_str)
                     
-                    # DIBUJAR EL TÍTULO (Si la casilla NO está marcada)
+                    # DIBUJAR EL TÍTULO 
                     if not plantilla_tiene_titulo:
                         tamanio_fuente_titulo = 16
                         while c.stringWidth(nombre_platica, "Helvetica-Bold", tamanio_fuente_titulo) > 500 and tamanio_fuente_titulo > 10:
