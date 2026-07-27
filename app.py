@@ -74,8 +74,19 @@ def generar_pdf_individual(nombre_str, titulo_str, pdf_base_bytes, config):
 def mostrar_pdf_en_navegador(pdf_buffer):
     """Incrusta un visor de PDF directamente en la interfaz de Streamlit usando Base64"""
     base64_pdf = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+    
+    # CAMBIO 1: Usamos <embed> en lugar de <iframe> para saltar el bloqueo de Edge
+    pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf">'
     st.markdown(pdf_display, unsafe_allow_html=True)
+    
+    # CAMBIO 2: Plan B infalible. Un botón para descargar la vista previa rápidamente.
+    st.download_button(
+        label="📥 Descargar PDF de Vista Previa (Si el visor no carga)",
+        data=pdf_buffer,
+        file_name="Vista_Previa_Test.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
 
 uploaded_excel = st.file_uploader("Cargar archivo Excel (.xlsx)", type=["xlsx"])
 uploaded_pdf = st.file_uploader("Cargar Plantilla PDF Base (.pdf)", type=["pdf"])
