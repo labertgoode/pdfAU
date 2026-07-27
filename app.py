@@ -1,10 +1,9 @@
 import os
 import io
-import base64
 import zipfile
 import pandas as pd
 import streamlit as st
-from reportlab.lib.pagesizes import letter, landscape
+import fitz  # PyMuPDF
 from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
@@ -14,6 +13,7 @@ st.set_page_config(page_title="Generador de Reconocimientos", layout="centered")
 st.title("Sistema de Generación de Reconocimientos")
 st.write("Procesamiento volátil en memoria. Cumplimiento de no persistencia.")
 
+
 def obtener_iniciales(nombre):
     """Extrae las iniciales de un nombre para la nomenclatura de archivos."""
     if pd.isna(nombre):
@@ -21,26 +21,38 @@ def obtener_iniciales(nombre):
     palabras = str(nombre).split()
     return "".join([palabra[0].upper() for palabra in palabras if palabra])
 
+
 def generar_pdf_individual(nombre_str, titulo_str, pdf_base_bytes, config):
     """
     Genera un solo PDF en memoria. Función reutilizable para Preview y Procesamiento Masivo.
+
+    FIX: el tamaño del canvas ya NO se asume fijo (landscape(letter)).
+    Se lee el MediaBox real de la plantilla, para que la calibración sea
+    válida sin importar el tamaño/proporción de la plantilla que se suba.
     """
-    PAGE_WIDTH, PAGE_HEIGHT = landscape(letter)
+    # --- LEER EL TAMAÑO REAL DE LA PLANTILLA ---
+    pdf_base_bytes.seek(0)
+    template_reader = PdfReader(pdf_base_bytes)
+    template_page = template_reader.pages[0]
+    mb = template_page.mediabox
+    PAGE_WIDTH = float(mb.width)
+    PAGE_HEIGHT = float(mb.height)
+
     temp_pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(temp_pdf_buffer, pagesize=landscape(letter))
-    
+    c = canvas.Canvas(temp_pdf_buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+
     centro_x_calculado = (PAGE_WIDTH / 2) + config['desfase_x']
-    
+
     # --- DIBUJAR EL NOMBRE ---
     tamanio_fuente_nombre = config['tamanio_fuente_nombre']
     # Reducción dinámica si el nombre es muy largo
     while c.stringWidth(nombre_str, config['fuente_nombre'], tamanio_fuente_nombre) > config['max_ancho'] and tamanio_fuente_nombre > 10:
-        tamanio_fuente_nombre -= 1 
-    
+        tamanio_fuente_nombre -= 1
+
     c.setFont(config['fuente_nombre'], tamanio_fuente_nombre)
-    c.setFillColor(HexColor(config['color_nombre'])) 
+    c.setFillColor(HexColor(config['color_nombre']))
     c.drawCentredString(centro_x_calculado, config['pos_y_nombre'], nombre_str)
-    
+
     # --- DIBUJAR EL TÍTULO (Si aplica) ---
     if not config['plantilla_tiene_titulo']:
         tamanio_fuente_titulo = config['tamanio_fuente_titulo']
@@ -48,45 +60,56 @@ def generar_pdf_individual(nombre_str, titulo_str, pdf_base_bytes, config):
             tamanio_fuente_titulo -= 1
 
         c.setFont(config['fuente_titulo'], tamanio_fuente_titulo)
-        c.setFillColor(HexColor(config['color_titulo'])) 
+        c.setFillColor(HexColor(config['color_titulo']))
         c.drawCentredString(centro_x_calculado, config['pos_y_titulo'], titulo_str)
-        
+
     c.save()
-    
+
     # --- FUSIÓN DE CAPAS EN MEMORIA ---
     temp_pdf_buffer.seek(0)
     text_reader = PdfReader(temp_pdf_buffer)
-    
-    pdf_base_bytes.seek(0)
-    template_reader = PdfReader(pdf_base_bytes)
-    
+
     writer = PdfWriter()
-    page = template_reader.pages[0]
+    page = template_page
     page.merge_page(text_reader.pages[0])
     writer.add_page(page)
-    
+
     output_pdf_buffer = io.BytesIO()
     writer.write(output_pdf_buffer)
     output_pdf_buffer.seek(0)
-    
+
     return output_pdf_buffer
 
+
 def mostrar_pdf_en_navegador(pdf_buffer):
-    """Incrusta un visor de PDF directamente en la interfaz de Streamlit usando Base64"""
-    base64_pdf = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
-    
-    # CAMBIO 1: Usamos <embed> en lugar de <iframe> para saltar el bloqueo de Edge
-    pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf">'
-    st.markdown(pdf_display, unsafe_allow_html=True)
-    
-    # CAMBIO 2: Plan B infalible. Un botón para descargar la vista previa rápidamente.
+    """
+    Renderiza la primera página del PDF como imagen PNG usando PyMuPDF.
+
+    FIX: se reemplaza el <embed> de base64 (dependía del visor de PDF nativo
+    del navegador, que en varios entornos institucionales/corporativos viene
+    deshabilitado y produce pantalla en blanco) por un render server-side
+    100% determinístico, sin dependencias externas en runtime.
+    """
+    pdf_buffer.seek(0)
+    doc = fitz.open(stream=pdf_buffer.getvalue(), filetype="pdf")
+    page = doc.load_page(0)
+
+    # zoom=2 ~ 144 DPI, suficiente para revisar alineación/tipografía
+    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+    img_bytes = pix.tobytes("png")
+    doc.close()
+
+    st.image(img_bytes, use_container_width=True)
+
+    pdf_buffer.seek(0)
     st.download_button(
-        label="📥 Descargar PDF de Vista Previa (Si el visor no carga)",
+        label="📥 Descargar PDF de Vista Previa",
         data=pdf_buffer,
         file_name="Vista_Previa_Test.pdf",
         mime="application/pdf",
         use_container_width=True
     )
+
 
 uploaded_excel = st.file_uploader("Cargar archivo Excel (.xlsx)", type=["xlsx"])
 uploaded_pdf = st.file_uploader("Cargar Plantilla PDF Base (.pdf)", type=["pdf"])
@@ -94,10 +117,9 @@ uploaded_pdf = st.file_uploader("Cargar Plantilla PDF Base (.pdf)", type=["pdf"]
 st.markdown("---")
 st.subheader("⚙️ Calibración Visual y Vista Previa")
 
-# Formulario para evitar recargas constantes por cada cambio de slider
 with st.expander("Ajustar coordenadas y tipografía", expanded=True):
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("**Ajustes del Nombre**")
         pos_y_nombre = st.slider("Altura del Nombre (Y)", min_value=150, max_value=400, value=305, step=5)
@@ -113,7 +135,6 @@ with st.expander("Ajustar coordenadas y tipografía", expanded=True):
         tamanio_titulo = st.slider("Tamaño Fuente Título", min_value=10, max_value=30, value=16)
         fuente_titulo = st.selectbox("Tipografía Título", ["Helvetica-Bold", "Helvetica", "Times-Bold", "Times-Roman"])
 
-    # Diccionario de configuracion consolidado
     config_visual = {
         'pos_y_nombre': pos_y_nombre,
         'desfase_x': desfase_x,
@@ -136,7 +157,7 @@ with col_prev2:
     titulo_prueba = st.text_input("Título de prueba", value='"Webinar Herramientas OSINT"')
 with col_prev3:
     st.write("")
-    st.write("") # Espaciador para alinear el botón
+    st.write("")
     btn_preview = st.button("👁️ Vista Previa", use_container_width=True)
 
 if btn_preview:
@@ -163,7 +184,7 @@ if uploaded_excel and uploaded_pdf:
 
             df = pd.read_excel(uploaded_excel, sheet_name="Aprobados", usecols="B")
             zip_buffer = io.BytesIO()
-            
+
             with st.spinner(f"Procesando {len(df)} registros..."):
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                     control_duplicados = {}
@@ -175,7 +196,7 @@ if uploaded_excel and uploaded_pdf:
 
                         nombre_str = str(nombre_participante).strip()
                         iniciales = obtener_iniciales(nombre_str)
-                        
+
                         if iniciales in control_duplicados:
                             control_duplicados[iniciales] += 1
                             nombre_archivo_pdf = f"Reconocimiento_{iniciales}_{control_duplicados[iniciales]}.pdf"
@@ -183,21 +204,19 @@ if uploaded_excel and uploaded_pdf:
                             control_duplicados[iniciales] = 0
                             nombre_archivo_pdf = f"Reconocimiento_{iniciales}.pdf"
 
-                        # Generamos el PDF usando la misma función de la vista previa, 
-                        # asegurando que los resultados sean identicos
                         output_pdf_buffer = generar_pdf_individual(
                             nombre_str=nombre_str,
                             titulo_str=nombre_platica_real,
                             pdf_base_bytes=uploaded_pdf,
                             config=config_visual
                         )
-                        
+
                         zip_file.writestr(nombre_archivo_pdf, output_pdf_buffer.getvalue())
 
             zip_buffer.seek(0)
-            
+
             st.success(f"¡Proceso finalizado con éxito! Registros procesados: {len(control_duplicados)}")
-            
+
             st.download_button(
                 label="📥 Descargar paquete de reconocimientos (.ZIP)",
                 data=zip_buffer,
@@ -205,7 +224,7 @@ if uploaded_excel and uploaded_pdf:
                 mime="application/zip",
                 type="primary"
             )
-            
+
             print(f"INFO: [AUDIT] Ejecución exitosa. Dataset: {file_name}. Items: {len(control_duplicados)}.")
 
         except Exception as e:
