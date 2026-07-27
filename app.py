@@ -10,8 +10,8 @@ from pypdf import PdfReader, PdfWriter
 
 st.set_page_config(page_title="Generador de Reconocimientos", layout="centered")
 
-st.title("Sistema de Generación de Reconocimientos")
-st.write("Procesamiento volátil en memoria. Cumplimiento de no persistencia.")
+st.title("Sistema de Generacion de Reconocimientos")
+st.write("Procesamiento volatil en memoria. Cumplimiento de no persistencia (SGSI).")
 
 def obtener_iniciales(nombre):
     if pd.isna(nombre):
@@ -22,11 +22,29 @@ def obtener_iniciales(nombre):
 uploaded_excel = st.file_uploader("Cargar archivo Excel (.xlsx)", type=["xlsx"])
 uploaded_pdf = st.file_uploader("Cargar Plantilla PDF Base (.pdf)", type=["pdf"])
 
-plantilla_tiene_titulo = st.checkbox("La plantilla ya incluye el título del webinar")
+plantilla_tiene_titulo = st.checkbox("La plantilla ya incluye el titulo del webinar")
+
+# ==========================================
+# NUEVA SECCIÓN DE CALIBRACIÓN INTERACTIVA
+# ==========================================
+with st.expander("Ajustes de Calibración Visual (Modificar si cambió el diseño del PDF)"):
+    st.info("Usa estos controles para mover el texto si la nueva plantilla tiene las líneas en otra posición. Valores menores = más abajo.")
+    col1, col2 = st.columns(2)
+    with col1:
+        # Modifiqué el valor por defecto a 250 asumiendo que bajó un poco, pero puedes ajustarlo.
+        POSICION_Y_NOMBRE = st.slider("Altura del Nombre (Y)", min_value=0, max_value=600, value=250, step=5)
+        MAX_ANCHO_LINEA = st.slider("Ancho máx. Nombre", min_value=200, max_value=700, value=480, step=10)
+        tamanio_fuente_nombre_base = st.slider("Tamaño Letra Nombre", min_value=10, max_value=50, value=24)
+    with col2:
+        POSICION_Y_TITULO = st.slider("Altura del Título (Y)", min_value=0, max_value=600, value=180, step=5)
+        DESFASE_X = st.slider("Desfase Horizontal (X)", min_value=-150, max_value=150, value=0, step=5, help="Negativo = Izquierda, Positivo = Derecha")
+        tamanio_fuente_titulo_base = st.slider("Tamaño Letra Título", min_value=10, max_value=50, value=16)
+# ==========================================
 
 if uploaded_excel and uploaded_pdf:
     if st.button("Procesar"):
         try:
+            # Extraer el nombre del archivo y formatearlo con comillas
             file_name = uploaded_excel.name.replace(".xlsx", "")
             nombre_platica = f'"{file_name}"'
 
@@ -37,17 +55,8 @@ if uploaded_excel and uploaded_pdf:
                 PAGE_WIDTH, PAGE_HEIGHT = landscape(letter)
                 control_duplicados = {}
 
-                # ==========================================
-                # VARIABLES DE CALIBRACIÓN VISUAL EXACTA
-                # ==========================================
-                DESFASE_X = -25          # AJUSTE: Movido a la izquierda para centrar con el texto gris
+                # Aplicamos el ajuste horizontal
                 CENTRO_X = (PAGE_WIDTH / 2) + DESFASE_X
-                
-                POSICION_Y_NOMBRE = 305  # AJUSTE: Subido de 285 a 305 para que el nombre descanse sobre la línea
-                MAX_ANCHO_LINEA = 480    
-                
-                POSICION_Y_TITULO = 215  # Se mantiene igual, ya que verticalmente se ve bien
-                # ==========================================
 
                 for index, row in df.iterrows():
                     nombre_participante = row.iloc[0]
@@ -67,28 +76,29 @@ if uploaded_excel and uploaded_pdf:
                     temp_pdf_buffer = io.BytesIO()
                     c = canvas.Canvas(temp_pdf_buffer, pagesize=landscape(letter))
                     
-                    # DIBUJAR EL NOMBRE 
-                    tamanio_fuente_nombre = 24
+                    # 1. DIBUJAR EL NOMBRE (Auto-ajustable a la linea negra)
+                    tamanio_fuente_nombre = tamanio_fuente_nombre_base
                     while c.stringWidth(nombre_str, "Helvetica-Bold", tamanio_fuente_nombre) > MAX_ANCHO_LINEA and tamanio_fuente_nombre > 10:
                         tamanio_fuente_nombre -= 1 
                     
                     c.setFont("Helvetica-Bold", tamanio_fuente_nombre)
-                    c.setFillColor(HexColor("#000000")) 
+                    c.setFillColor(HexColor("#000000")) # Nombre en Negro
                     c.drawCentredString(CENTRO_X, POSICION_Y_NOMBRE, nombre_str)
                     
-                    # DIBUJAR EL TÍTULO 
+                    # 2. DIBUJAR EL TITULO (Si la casilla no esta marcada)
                     if not plantilla_tiene_titulo:
-                        tamanio_fuente_titulo = 16
+                        tamanio_fuente_titulo = tamanio_fuente_titulo_base
+                        # Evitar que el titulo se salga de los margenes
                         while c.stringWidth(nombre_platica, "Helvetica-Bold", tamanio_fuente_titulo) > 500 and tamanio_fuente_titulo > 10:
                             tamanio_fuente_titulo -= 1
 
                         c.setFont("Helvetica-Bold", tamanio_fuente_titulo)
-                        c.setFillColor(HexColor("#000000")) 
+                        c.setFillColor(HexColor("#000000")) # Titulo en Negro oscuro
                         c.drawCentredString(CENTRO_X, POSICION_Y_TITULO, nombre_platica)
                         
                     c.save()
                     
-                    # FUSIÓN EN MEMORIA RAM
+                    # FUSION EN MEMORIA RAM
                     temp_pdf_buffer.seek(0)
                     text_reader = PdfReader(temp_pdf_buffer)
                     
@@ -117,8 +127,8 @@ if uploaded_excel and uploaded_pdf:
                 mime="application/zip"
             )
             
-            print(f"INFO: [AUDIT] Ejecución exitosa. Dataset: {file_name}. Items: {len(control_duplicados)}.")
+            print(f"INFO: [AUDIT] Ejecucion exitosa. Dataset: {file_name}. Items: {len(control_duplicados)}.")
 
         except Exception as e:
-            st.error("Error en el procesamiento de archivos. Verifique el formato de la hoja 'Aprobados'.")
-            print(f"ERROR: [AUDIT] Fallo en ejecución: {str(e)}")
+            st.error("Error en el procesamiento de archivos. Verifique el formato.")
+            print(f"ERROR: [AUDIT] Fallo en ejecucion: {str(e)}")
