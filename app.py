@@ -46,7 +46,9 @@ def generar_pdf_individual(nombre_str, titulo_str, pdf_base_bytes, config):
     # --- DIBUJAR EL NOMBRE ---
     tamanio_fuente_nombre = config['tamanio_fuente_nombre']
     # Reducción dinámica si el nombre es muy largo
-    while c.stringWidth(nombre_str, config['fuente_nombre'], tamanio_fuente_nombre) > config['max_ancho'] and tamanio_fuente_nombre > 10:
+    # Piso en 12 (no 10): evita que nombres muy largos (5-6 palabras) queden
+    # ilegiblemente pequeños; con max_ancho=380 casi nunca se llega tan abajo.
+    while c.stringWidth(nombre_str, config['fuente_nombre'], tamanio_fuente_nombre) > config['max_ancho'] and tamanio_fuente_nombre > 12:
         tamanio_fuente_nombre -= 1
 
     c.setFont(config['fuente_nombre'], tamanio_fuente_nombre)
@@ -124,8 +126,8 @@ with st.expander("Ajustar coordenadas y tipografía", expanded=True):
         st.markdown("**Ajustes del Nombre**")
         pos_y_nombre = st.slider("Altura del Nombre (Y)", min_value=150, max_value=400, value=305, step=5)
         desfase_x = st.slider("Desfase Horizontal (X)", min_value=-100, max_value=100, value=-25, step=5)
-        max_ancho = st.slider("Ancho Máximo (Línea)", min_value=300, max_value=700, value=480, step=10)
-        tamanio_nombre = st.slider("Tamaño Fuente Nombre", min_value=12, max_value=40, value=24)
+        max_ancho = st.slider("Ancho Máximo (Línea)", min_value=300, max_value=700, value=380, step=10)
+        tamanio_nombre = st.slider("Tamaño Fuente Nombre", min_value=12, max_value=40, value=22)
         fuente_nombre = st.selectbox("Tipografía Nombre", ["Helvetica-Bold", "Helvetica", "Times-Bold", "Times-Roman"])
 
     with col2:
