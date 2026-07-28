@@ -125,7 +125,7 @@ with st.expander("Ajustar coordenadas y tipografía", expanded=True):
     with col1:
         st.markdown("**Ajustes del Nombre**")
         pos_y_nombre = st.slider("Altura del Nombre (Y)", min_value=150, max_value=400, value=305, step=5)
-        desfase_x = st.slider("Desfase Horizontal (X)", min_value=-100, max_value=100, value=-25, step=5)
+        desfase_x = st.slider("Desfase Horizontal (X)", min_value=-150, max_value=100, value=-105, step=5)
         max_ancho = st.slider("Ancho Máximo (Línea)", min_value=300, max_value=700, value=380, step=10)
         tamanio_nombre = st.slider("Tamaño Fuente Nombre", min_value=12, max_value=40, value=22)
         fuente_nombre = st.selectbox("Tipografía Nombre", ["Helvetica-Bold", "Helvetica", "Times-Bold", "Times-Roman"])
