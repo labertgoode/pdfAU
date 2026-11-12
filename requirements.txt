@@ -1,6 +1,6 @@
 streamlit
 pandas
 openpyxl
+pymupdf
 reportlab
 pypdf
-pymupdf
