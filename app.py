@@ -71,10 +71,12 @@ def generar_pdf_individual(nombre_str, titulo_str, pdf_base_bytes, config):
     temp_pdf_buffer.seek(0)
     text_reader = PdfReader(temp_pdf_buffer)
 
+    # FIX pypdf 7.0: merge_page() ya no funciona sobre páginas que vienen
+    # directo de un PdfReader. Primero se agrega la página al writer
+    # (add_page regresa la página ya ligada a él) y después se fusiona.
     writer = PdfWriter()
-    page = template_page
+    page = writer.add_page(template_page)
     page.merge_page(text_reader.pages[0])
-    writer.add_page(page)
 
     output_pdf_buffer = io.BytesIO()
     writer.write(output_pdf_buffer)
